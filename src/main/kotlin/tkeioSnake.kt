@@ -29,63 +29,48 @@ import io.battlesnake.core.StartRequest
 import io.battlesnake.core.UP
 import io.battlesnake.core.strategy
 import io.ktor.application.ApplicationCall
+import jtkeio.brain.Brain
 
-object MyKotlinSnake : AbstractBattleSnake<MyKotlinSnake.MySnakeContext>() {
+public fun buildSnake(context: TkeioSnake.MySnakeContext, request: StartRequest) {
+    val snakeBrain = Brain(Array((request.board.height*request.board.width) + 1){if (it>(request.board.height*request.board.width) - 1) (7) else (100)}, arrayOf(1,1,1,1))
+    snakeBrain.searchAlgorithm = {da, sg -> snakeBrain.generateNeuronProximityAverageProbability(da, sg)}
+}
+
+fun translateMove(moveSet: Array<Int>): String {
+    return "up"
+}
+
+fun grabMove(context: SnakeContext, request: MoveRequest): MoveResponse {
+    return LEFT
+}
+
+//I tried putting the functions up here so that I had room to do calculations before giving the answer
+
+object TkeioSnake : AbstractBattleSnake<TkeioSnake.MySnakeContext>() {
 
   override fun gameStrategy(): GameStrategy<MySnakeContext> =
     strategy(verbose = true) {
 
       onDescribe { call: ApplicationCall ->
-        DescribeResponse("me", "#ff0000", "beluga", "bolt")
+        DescribeResponse("jtkeio", "#000000", "beluga", "bolt")
       }
 
       onStart { context: MySnakeContext, request: StartRequest ->
         val you = request.you
         val board = request.board
-        context.gotoOriginMoves = originPath(you.headPosition.x, you.headPosition.y).iterator()
-        context.perimeterMoves = perimeterPath(board.width, board.height).iterator()
-        logger.info { "Goto origin moves: ${you.headPosition.x},${you.headPosition.y} game id: ${request.gameId}" }
-        logger.info { "Perimeter moves: ${board.width}x${board.height} game id: ${request.gameId}" }
       }
 
       onMove { context: MySnakeContext, request: MoveRequest ->
-        if (request.isAtOrigin)
-          context.goneToOrigin = true
-
-        val moves =
-          if (context.goneToOrigin)
-            context.perimeterMoves
-          else
-            context.gotoOriginMoves
-
-        moves.next()
+          grabMove(context, request)
       }
     }
 
-  class MySnakeContext : SnakeContext() {
-    lateinit var gotoOriginMoves: Iterator<MoveResponse>
-    lateinit var perimeterMoves: Iterator<MoveResponse>
-    var goneToOrigin = false
-  }
+  class MySnakeContext : SnakeContext()
 
-  override fun snakeContext(): MySnakeContext =
+    override fun snakeContext(): MySnakeContext =
     MySnakeContext()
 
-  private fun originPath(x: Int, y: Int) =
-    sequence {
-      repeat(y) { yield(DOWN) }
-      repeat(x) { yield(LEFT) }
-    }
 
-  private fun perimeterPath(width: Int, height: Int) =
-    sequence {
-      while (true) {
-        repeat(height - 1) { yield(UP) }
-        repeat(width - 1) { yield(RIGHT) }
-        repeat(height - 1) { yield(DOWN) }
-        repeat(width - 1) { yield(LEFT) }
-      }
-    }
 
   @JvmStatic
   fun main(args: Array<String>) {
