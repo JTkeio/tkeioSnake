@@ -44,7 +44,7 @@ group = 'io.battlenake'
 version = '1.0.0'
 
 dependencies {
-  implementation "com.github.Jtkeio:Brain:a81e2d3"
+  implementation "com.github.Jtkeio:Brain:e05b89d"
   implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
   implementation "io.ktor:ktor-server-core:$ktor_version"
   implementation "com.github.pambrose:battlesnake-quickstart:${quickstart_version}"

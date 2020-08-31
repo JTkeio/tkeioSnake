@@ -16,40 +16,95 @@
 
 @file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
 
-import io.battlesnake.core.AbstractBattleSnake
-import io.battlesnake.core.DOWN
-import io.battlesnake.core.DescribeResponse
-import io.battlesnake.core.GameStrategy
-import io.battlesnake.core.LEFT
-import io.battlesnake.core.MoveRequest
-import io.battlesnake.core.MoveResponse
-import io.battlesnake.core.RIGHT
-import io.battlesnake.core.SnakeContext
-import io.battlesnake.core.StartRequest
-import io.battlesnake.core.UP
-import io.battlesnake.core.strategy
-import io.ktor.application.ApplicationCall
+import io.battlesnake.core.*
+import io.ktor.application.*
 import jtkeio.brain.Brain
-
-public fun buildSnake(context: TkeioSnake.MySnakeContext, request: StartRequest) {
-    val snakeBrain = Brain(Array((request.board.height*request.board.width) + 1){if (it>(request.board.height*request.board.width) - 1) (7) else (100)}, arrayOf(1,1,1,1))
-    snakeBrain.searchAlgorithm = {da, sg -> snakeBrain.generateNeuronProximityAverageProbability(da, sg)}
-}
-
-fun translateMove(moveSet: Array<Int>): String {
-    return "up"
-}
-
-fun grabMove(context: SnakeContext, request: MoveRequest): MoveResponse {
-    return LEFT
-}
-
-//I tried putting the functions up here so that I had room to do calculations before giving the answer
+import kotlin.random.Random
 
 object TkeioSnake : AbstractBattleSnake<TkeioSnake.MySnakeContext>() {
+    lateinit var snakeBrain: Brain
+    var deadBool = false
+    var changedMove = -1
+    var maxMoves = 0.0
+    var currentMoves = 0.0
 
-  override fun gameStrategy(): GameStrategy<MySnakeContext> =
-    strategy(verbose = true) {
+    fun buildSnake(context: MySnakeContext, request: StartRequest) {
+        this.snakeBrain = Brain(arrayOf(5, 5, 5, 5), arrayOf(3))
+        snakeBrain.read("C:/Users/Jacob Tkeio/Desktop/Programs/Kotlin Projects/${request.board.width}" + "x" + "${request.board.height}" + "Brain.txt")
+        snakeBrain.searchAlgorithm = {da, sg -> snakeBrain.generateNeuronProximityPluralityAbsolute(da, sg)}
+        currentMoves = 0.0
+    } //get rid of the read or the old file if you change something
+
+    fun translateMove(plannedMove: Int): String {
+        val availableMoves = arrayOf("up", "right", "down", "left")
+        return availableMoves[plannedMove]
+    }
+
+    fun grabMove(context: SnakeContext, request: MoveRequest): MoveResponse {
+        val searchAddress = Array(4){0}
+        val head = request.you.headPosition
+        searchAddress[0] = bubbleSearch(arrayOf(0, 1), head, request)
+        searchAddress[1] = bubbleSearch(arrayOf(0, -1), head, request)
+        searchAddress[2] = bubbleSearch(arrayOf(1, 0), head, request)
+        searchAddress[3] = bubbleSearch(arrayOf(-1, 0), head, request)
+        val moveString = translateMove(snakeBrain.pullNeuron(searchAddress, 1)[0])
+        changedMove = snakeBrain.getLinear(searchAddress, snakeBrain.dimensions)
+        currentMoves++
+        return MoveResponse(moveString)
+    }
+
+    fun bubbleSearch(offset: Array<Int>, head: Position, request: MoveRequest): Int {
+        val x = head.x + offset[0]
+        val y = head.y + offset[1]
+        if (x<0 || x+1>request.board.width || y<0 || y+1>request.board.height) {
+            return 4
+        }
+        val board = request.board
+        for (j in board.snakes) {
+            if (j.body.filter{it.x == x && it.y == y}.size == 1) {
+                if (j.id == request.you.id) {
+                    return 3
+                } else {
+                    return 2
+                }
+            }
+        }
+        for (food in board.food) {
+            if (food.x == x && food.y == y) {
+                return 1
+            }
+        }
+        return 0
+    }
+
+    fun onFinish(request: EndRequest) {
+        deadBool = false
+        for (i in request.board.snakes) {
+            if (i.id == request.you.id && request.you.health > 0) {
+                deadBool = true
+                break
+            }
+            if (i.health > 0) {
+                deadBool = false
+            }
+        }
+        if (deadBool || currentMoves > maxMoves) {
+            maxMoves = currentMoves
+            snakeBrain.store("C:/Users/Jacob Tkeio/Desktop/Programs/Kotlin Projects/${request.board.width}" + "x" + "${request.board.height}" + "Brain.txt")
+            println()
+            println("SNAKE WON; STORING INFORMATION")
+            println()
+        } else {
+            snakeBrain.pushNeuron(snakeBrain.getDimensional(changedMove, snakeBrain.dimensions), arrayOf(-1))
+            println()
+            println("SNAKE LOST; ERASING LAST MOVE: ${snakeBrain.getDimensional(changedMove, snakeBrain.dimensions).joinToString(",")}")
+            println()
+            snakeBrain.store("C:/Users/Jacob Tkeio/Desktop/Programs/Kotlin Projects/${request.board.width}" + "x" + "${request.board.height}" + "Brain.txt")
+            changedMove = -1
+        }
+    }
+
+    override fun gameStrategy(): GameStrategy<MySnakeContext> = strategy(verbose = true) {
 
       onDescribe { call: ApplicationCall ->
         DescribeResponse("jtkeio", "#000000", "beluga", "bolt")
@@ -58,15 +113,20 @@ object TkeioSnake : AbstractBattleSnake<TkeioSnake.MySnakeContext>() {
       onStart { context: MySnakeContext, request: StartRequest ->
         val you = request.you
         val board = request.board
+          buildSnake(context, request)
       }
 
       onMove { context: MySnakeContext, request: MoveRequest ->
           grabMove(context, request)
       }
+
+        onEnd { context, request ->
+            onFinish(request)
+            EndResponse()
+        }
     }
 
   class MySnakeContext : SnakeContext()
-
     override fun snakeContext(): MySnakeContext =
     MySnakeContext()
 
