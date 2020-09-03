@@ -19,7 +19,6 @@
 import io.battlesnake.core.*
 import io.ktor.application.*
 import jtkeio.brain.Brain
-import kotlin.random.Random
 
 object TkeioSnake : AbstractBattleSnake<TkeioSnake.MySnakeContext>() {
     lateinit var snakeBrain: Brain
@@ -27,9 +26,10 @@ object TkeioSnake : AbstractBattleSnake<TkeioSnake.MySnakeContext>() {
     var changedMove = -1
     var maxMoves = 0.0
     var currentMoves = 0.0
+    var lastMove = ""
 
     fun buildSnake(context: MySnakeContext, request: StartRequest) {
-        this.snakeBrain = Brain(arrayOf(5, 5, 5, 5), arrayOf(3))
+        this.snakeBrain = Brain(arrayOf(5), arrayOf(3))
         snakeBrain.read("C:/Users/Jacob Tkeio/Desktop/Programs/Kotlin Projects/${request.board.width}" + "x" + "${request.board.height}" + "Brain.txt")
         snakeBrain.searchAlgorithm = {da, sg -> snakeBrain.generateNeuronProximityPluralityAbsolute(da, sg)}
         currentMoves = 0.0
@@ -41,21 +41,27 @@ object TkeioSnake : AbstractBattleSnake<TkeioSnake.MySnakeContext>() {
     }
 
     fun grabMove(context: SnakeContext, request: MoveRequest): MoveResponse {
-        val searchAddress = Array(4){0}
+        val searchAddress = Array(1){0}
         val head = request.you.headPosition
-        searchAddress[0] = bubbleSearch(arrayOf(0, 1), head, request)
-        searchAddress[1] = bubbleSearch(arrayOf(0, -1), head, request)
-        searchAddress[2] = bubbleSearch(arrayOf(1, 0), head, request)
-        searchAddress[3] = bubbleSearch(arrayOf(-1, 0), head, request)
+        if (lastMove == "up") {
+            searchAddress[0] = bubbleSearch(arrayOf(0, 1), request)
+        } else if (lastMove == "down") {
+            searchAddress[0] = bubbleSearch(arrayOf(0,-1), request)
+        } else if (lastMove == "left") {
+            searchAddress[0] = bubbleSearch(arrayOf(-1,0), request)
+        } else {
+            searchAddress[0] = bubbleSearch(arrayOf(1,0), request)
+        }
         val moveString = translateMove(snakeBrain.pullNeuron(searchAddress, 1)[0])
+        lastMove = moveString
         changedMove = snakeBrain.getLinear(searchAddress, snakeBrain.dimensions)
         currentMoves++
         return MoveResponse(moveString)
     }
 
-    fun bubbleSearch(offset: Array<Int>, head: Position, request: MoveRequest): Int {
-        val x = head.x + offset[0]
-        val y = head.y + offset[1]
+    fun bubbleSearch(offset: Array<Int>, request: MoveRequest): Int {
+        val x = request.you.headPosition.x + offset[0]
+        val y = request.you.headPosition.y + offset[1]
         if (x<0 || x+1>request.board.width || y<0 || y+1>request.board.height) {
             return 4
         }
